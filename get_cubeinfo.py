@@ -74,8 +74,8 @@ def get_cubeinfo(header, returnHeader=False):
     # calculate RA, DEC
     gwcsa = wcs.WCS(hdr2d)
     n1, n2 = hdr2d['NAXIS1'], hdr2d['NAXIS2']
-    ax = np.reshape(np.mgrid[0:n1:1], (1, n1))  # For FITS standard, origin = 1
-    ay = np.reshape(np.mgrid[0:n2:1], (n2, 1))  #   then for numpy standard, origin = 0
+    ax = np.reshape(np.mgrid[0:n1:1]+1, (1, n1))  # For FITS standard, origin = 1
+    ay = np.reshape(np.mgrid[0:n2:1]+1, (n2, 1))  #   then for numpy standard, origin = 0
     coor1, coor2 = gwcsa.all_pix2world(ax, ay, 1) # coor1 = ra  or glon
     return_arrays.append(coor1) 		  # coor2 = dec or glat
     return_arrays.append(coor2)
