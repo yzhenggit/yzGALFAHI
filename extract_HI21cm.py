@@ -1,19 +1,16 @@
 import os
-import datetime
 import numpy as np
-from astropy.table import Table
-import astropy.io.fits as fits
-from yzGALFAHI.get_cubeinfo import get_cubeinfo
-from astropy.coordinates import SkyCoord
 
-import warnings
-warnings.filterwarnings('ignore')
+### Now would prefer to set warning ignore locally to each specific block
+# import warnings
+# warnings.filterwarnings('ignore')
 
 import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def find_the_cube(ra, dec, observation):
+    from astropy.table import Table
     '''
     Use the input (ra, dec) to decide which cube the data locates.
 
@@ -49,6 +46,12 @@ def extract_LAB(tar_name, tar_gl, tar_gb, labfile, filedir='.', beam=1.0):
 
     beam: to decide within what diameter (in deg) the HI spec is averaged. 
     '''
+    from yzGALFAHI.get_cubeinfo import get_cubeinfo
+    from astropy.coordinates import SkyCoord
+    import astropy.io.fits as fits
+
+    if beam < 0.5: beam = 0.5 # LAB minimum pix size is 0.5 deg 
+                              # extract 1 pix in such case 
     beam_radius = beam/2.
 
     # labfile = '/Users/Yong/Dropbox/databucket/LAB/labh_glue.fits'
@@ -71,7 +74,6 @@ def extract_LAB(tar_name, tar_gl, tar_gb, labfile, filedir='.', beam=1.0):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=RuntimeWarning)
         ispec = np.nanmean(np.nanmean(labdata_copy, axis=2), axis=1)
-
     return cvel, ispec
 
 def save_LAB_fits(tar_name, tar_gl, tar_gb, tar_RA, tar_DEC, filedir='.', beam=1.):
@@ -80,6 +82,7 @@ def save_LAB_fits(tar_name, tar_gl, tar_gb, tar_RA, tar_DEC, filedir='.', beam=1
 
     beam: to decide within what diameter (in deg) the HI spec is averaged. 
     '''
+    import astropy.io.fits as fits
 
     labfile = '/Users/Yong/Dropbox/databucket/LAB/labh_glue.fits' 
     cvel, ispec = extract_LAB(tar_name, tar_gl, tar_gb, labfile, filedir=filedir, beam=beam)
@@ -101,6 +104,8 @@ def save_LAB_fits(tar_name, tar_gl, tar_gb, tar_RA, tar_DEC, filedir='.', beam=1
     prihdr['DEC_TARG'] = (round(tar_DEC, 4), 'Declination (deg; J2000); HSLA(Peeples+2017)')
     prihdr.comments['DATE'] = 'Date of LAB data cube final release' 
     prihdr['HISTORY'] = 'Extract HI21cm line from LAB within beam diameter size of %.2f degree. '%(beam)
+
+    import datetime
     prihdr['HISTORY'] = 'This spectrum is generated on %s.'%(str(datetime.datetime.now()))
     prihdr['HISTORY'] = 'The LAB cube is from Kalberla et al. (2005). See there for more info.'
     prihdr['HISTORY'] = 'LAB cube data is in grid of 30 arcmin - violate Nyquist sampling.'
@@ -127,6 +132,12 @@ def extract_HI4PI(target_info, filedir='.', beam=1.0):
 
     beam: to decide within what diameter (in deg) the HI spec is averaged. 
     '''
+    
+    from yzGALFAHI.get_cubeinfo import get_cubeinfo
+    from astropy.coordinates import SkyCoord
+    import astropy.io.fits as fits
+    from astropy.table import Table
+
     target = target_info['NAME']
     beam_radius = beam/2.
 
@@ -206,6 +217,11 @@ def extract_HI21cm(target_info, filedir='.', observation='HI4PI', beam=1.):
 
     beam: to decide within what diameter (in deg) the HI spec is averaged. 
     '''
+
+    from yzGALFAHI.get_cubeinfo import get_cubeinfo
+    from astropy.coordinates import SkyCoord
+    import astropy.io.fits as fits
+    from astropy.table import Table
 
     target = target_info['NAME']
     beam_radius = beam/2.
