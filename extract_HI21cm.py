@@ -1,9 +1,9 @@
 import os
 import numpy as np
 
-### Now would prefer to set warning ignore locally to each specific block
-# import warnings
-# warnings.filterwarnings('ignore')
+## warning mainly from reading fits header. 
+import warnings
+warnings.filterwarnings('ignore')
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -40,11 +40,156 @@ def find_the_cube(ra, dec, observation):
 
         return cubename, cubedir
 
-def extract_LAB(tar_name, tar_gl, tar_gb, labfile, filedir='.', beam=1.0):
+## =================================================================================================
+def create_primary_header_HI(target_info, observation='HI4PI', beam=1.0):
+    import astropy.io.fits as fits
+    import datetime
+
+    if observation not in ['HI4PI', 'LAB', 'GALFA-HI', 'GALFAHI']:
+        # logger.info('Do not recognize %s'%(observation))
+        return False
+    
+    newhdr = fits.Header()
+    newhdr['TARGNAME'] = (target_info['NAME'], 'Target name; HSLA (Peeples+2017)')
+    newhdr['RA_TARG'] = (round(target_info['RA'], 4), 'Right Ascension (deg); HSLA (Peeples+2017)')
+    newhdr['DEC_TARG'] = (round(target_info['DEC'], 4), 'Declination (deg); HSLA (Peeples+2017)')
+    newhdr['HLSPNAME'] = ('COS-GAL', 'HSLP product name')
+    newhdr['HLSPLEAD'] = 'Yong Zheng'
+    newhdr['BEAMFWHM'] = (beam, 'Beam (deg) within which data are extracted')
+    newhdr['RESTFRQ'] = (1420405751.77, 'Hz')
+    newhdr['EQUINOX'] = 2000.
+    
+    if observation == 'LAB':
+        newhdr['SURVEY'] = ('LAB', 'The Leiden/Argentine/Bonn (LAB) Survey')
+        newhdr['TELESCOP'] = ('Dwingeloo - Villa Elisa', 'Telescope')
+        newhdr['REFERENC'] = ('Kalberla et al. (2005) A&A 440, 775', 'LAB cube reference')
+        newhdr['HISTORY'] = 'HI21cm line from LAB cube, averaged within %.1f deg beam.'%(beam)
+        newhdr['HISTORY'] = 'This spectrum is generated on %s.'%(str(datetime.datetime.now()))
+        newhdr['HISTORY'] = 'Note LAB cube data is in grid of 30 arcmin, no Nyquist sampling.'
+    elif observation == 'HI4PI':
+        newhdr['SURVEY'] = ('HI4PI', 'The HI 4-PI Survey')
+        newhdr['TELESCOP'] = ('Effelsberg 100m RT; ATNF Parkes 64-m', 'Telescope')
+        newhdr['REFERENC'] = ('HI4PI Collaboration 2016', 'HI4PI cubes reference')
+        newhdr['HISTORY'] = 'HI21cm line from HI4PI cubes, averaged within %.1f deg beam.'%(beam)
+        newhdr['HISTORY'] = 'This spectrum is generated on %s.'%(str(datetime.datetime.now()))
+    else:  # this is for GALFA-HI
+        newhdr['SURVEY'] = ('GALFA-HI DR2', 'The Galactic ALFA HI survey')
+        newhdr['TELESCOP'] = ('Arecibo 305m', 'Telescope')
+        newhdr['INSTRUME'] = ('Arecibo L-Band Feed Array (ALFA)', 'Instrument')
+        newhdr['REFERENC'] = ('Peek et al. (2018), ApJS, 234, 2P', 'GALFA-HI cubes reference')
+        newhdr['HISTORY'] = 'HI21cm line from GALFA-HI cubes, averaged within %.1f deg beam.'%(beam)
+        newhdr['HISTORY'] = 'This spectrum is generated on %s.'%(str(datetime.datetime.now()))
+
+    primary_hdu = fits.PrimaryHDU(header=newhdr)
+    return primary_hdu
+
+## =================================================================================================
+def save_HIspec_fits(target_info, savedir='.', beam=1., observation='HI4PI'):
     '''
     To obtain the corresponding HI 21cm spec with certain beam of LAB. 
 
     beam: to decide within what diameter (in deg) the HI spec is averaged. 
+    '''
+    
+    import astropy.io.fits as fits
+    import numpy as np
+    import os
+
+    if observation not in ['HI4PI', 'LAB', 'GALFA-HI', 'GALFAHI']:
+        logger.info('Do not recognize %s'%(observation))
+        return False
+
+    ## create the primary header for this spectra 
+    prihdu = create_primary_header_HI(target_info, observation=observation, beam=beam):
+
+    ## extract HI spectra from certain HI survey, and create the fits data extension
+    if observation == 'LAB':
+        labfile = '/Users/Yong/Dropbox/databucket/LAB/labh_glue.fits'
+        hivel, hispec = extract_LAB(target_info['l'], target_info['b'], beam=beam, datadir=labfile)
+    elif observation == 'HI4PI':
+        hi4dir = '/Volumes/YongData2TB/HI4PI'
+        hivel, hispec = extract_HI4PI_GALFAHI(target_info['RA'], target_info['DEC'], beam=beam, 
+                                              observation='HI4PI', datadir=hi4dir)
+    else: ## this is for GALFA-HI
+        ghidir = '/Volumes/YongData2TB/GALFAHI_DR2/RC5/Wide'
+        hivel, hispec = extract_HI4PI_GALFAHI(target_info['RA'], target_info['DEC'], beam=beam, 
+                                              observation='GALFA-HI', datadir=ghidir)
+
+    col1 = fits.Column(name='VLSR', format='D', array=hivel)
+    col2 = fits.Column(name='FLUX', format='D', array=hispec)
+    cols = fits.ColDefs([col1, col2])
+    tbhdu = fits.BinTableHDU.from_columns(cols)
+    tbhdu.header['TUNIT1'] = 'km/s' # (or whatever unit the "WAVE" column is).
+    tbhdu.header['TUNIT2'] = 'K' # for the flux array or whatever unit that column is
+
+    ## now save the data
+    thdulist = fits.HDUList([prihdu, tbhdu])
+    if os.path.isdir(savedir) is False: os.makedirs(savedir)
+    obs_tag = observation.lower().replace('-', '')
+    hifile = '%s/hlsp_cos-gal_%s_%s_%s_v1_h-i-21cm-spec.fits.gz'%(savedir, obs_tag, obs_tag, 
+                                                                  tar_name.lower())
+    thdulist.writeto(hifile, clobber=True)
+    return hifile
+
+
+## =================================================================================================
+def cubes_within_beam(tar_RA, tar_DEC, datadir='.', beam=1.0, observation='HI4PI'):
+    '''
+    Find the cubes that all have data within the reqiured beam
+    
+    '''
+   
+    from yzGALFAHI.get_cubeinfo import get_cubeinfo
+    from astropy.coordinates import SkyCoord
+    import astropy.io.fits as fits
+    from astropy.table import Table
+    import warnings
+   
+    tar_coord = SkyCoord(ra=tar_RA, dec=tar_DEC, unit='deg')
+   
+    surveytable = '/Users/Yong/Dropbox/GitRepo/yzGALFAHI/tables/%s_RADEC.dat'%(observation)
+    clt = Table.read(surveytable, format='ascii')
+    
+    if observation == 'HI4PI':
+        cubewth = 20   # deg 
+    elif observation == 'GALFAHI':
+        cubewth = 10   # deg 
+    else:
+        logger.info('Cannot recognize this observation: '%(observation))
+   
+    ## this warning would occur if there is nan in ra/dec read from the cubes
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+
+        cubefiles = []
+        for ic in range(len(clt)):
+            ## if the cube is really far away, then simply just let it go
+            poss_ramax = abs(clt['cra'][ic]-tar_RA)
+            poss_decmax = abs(clt['cdec'][ic]-tar_DEC)
+            if poss_ramax>cubewth+beam or poss_decmax>cubewth+beam: # choose 20 because HI4PI cube size 
+                continue
+            else:
+                ## if the cube is within the beam range, then do a serious search 
+                cubefile = datadir+'/'+clt['cubename'][ic]+'.fits'
+                cubehdr = fits.getheader(cubefile)
+                cra, cdec, cvel = get_cubeinfo(cubehdr)
+                cube_coord = SkyCoord(ra=cra, dec=cdec, unit='deg')
+                dist_coord = tar_coord.separation(cube_coord)
+
+                dist = dist_coord.value
+                within_beam_2d = dist<=beam/2.
+                if dist[within_beam_2d].size > 0:
+                    cubefiles.append(cubefile)
+    return cubefiles
+
+## =================================================================================================
+def extract_LAB(tar_gl, tar_gb, beam=1.0,
+                datadir='/Users/Yong/Dropbox/databucket/LAB/labh_glue.fits'):
+    '''
+    To obtain the corresponding HI 21cm spec with certain beam of LAB. 
+
+    beam: to decide within what diameter (in deg) the HI spec is averaged. 
+          If input beam is less than 0.5, then force it to 0.5
     '''
     from yzGALFAHI.get_cubeinfo import get_cubeinfo
     from astropy.coordinates import SkyCoord
@@ -54,7 +199,7 @@ def extract_LAB(tar_name, tar_gl, tar_gb, labfile, filedir='.', beam=1.0):
                               # extract 1 pix in such case 
     beam_radius = beam/2.
 
-    # labfile = '/Users/Yong/Dropbox/databucket/LAB/labh_glue.fits'
+    labfile = datadir
     labdata = fits.getdata(labfile)
     labhdr = fits.getheader(labfile)
     gl, gb, cvel = get_cubeinfo(labhdr)
@@ -62,13 +207,13 @@ def extract_LAB(tar_name, tar_gl, tar_gb, labfile, filedir='.', beam=1.0):
 
     tar_coord = SkyCoord(l=tar_gl, b=tar_gb, unit='deg', frame='galactic')
     dist = tar_coord.separation(cube_coord)
-    
+   
     dist_copy = dist.value.copy()
     within_beam_2d = dist_copy<=beam_radius
     within_beam_3d = np.asarray([within_beam_2d]*cvel.size)
     labdata_copy = labdata.copy()
     labdata_copy[np.logical_not(within_beam_3d)] = np.nan
-    
+
     # I expect to see RuntimeWarnings in this block by taking nanmean of full nan arrays
     import warnings
     with warnings.catch_warnings():
@@ -76,92 +221,49 @@ def extract_LAB(tar_name, tar_gl, tar_gb, labfile, filedir='.', beam=1.0):
         ispec = np.nanmean(np.nanmean(labdata_copy, axis=2), axis=1)
     return cvel, ispec
 
-def save_LAB_fits(tar_name, tar_gl, tar_gb, tar_RA, tar_DEC, filedir='.', beam=1.):
+
+## =================================================================================================
+def extract_HI4PI_GALFAHI(tar_RA, tar_DEC, beam=1.0, observation='HI4PI', 
+                          datadir='/Volumes/YongData2TB/HI4PI/'):
     '''
-    To obtain the corresponding HI 21cm spec with certain beam of LAB. 
-
-    beam: to decide within what diameter (in deg) the HI spec is averaged. 
-    '''
-    import astropy.io.fits as fits
-
-    labfile = '/Users/Yong/Dropbox/databucket/LAB/labh_glue.fits' 
-    cvel, ispec = extract_LAB(tar_name, tar_gl, tar_gb, labfile, filedir=filedir, beam=beam)
-
-    ### Create the primary header 
-    labhdr = fits.getheader(labfile)
-    prihdr = labhdr.copy()
-    for ikey in ['NAXIS1', 'CTYPE1', 'CRVAL1', 'CRPIX1', 'CDELT1', 'CROTA1', 'CUNIT1', 
-                 'NAXIS2', 'CTYPE2', 'CRVAL2', 'CRPIX2', 'CDELT2', 'CROTA2', 'CUNIT2',
-                 'NAXIS3', 'CTYPE3', 'CRVAL3', 'CRPIX3', 'CDELT3', 'CROTA3', 'CUNIT3', 
-                 'PROJ', 'SYSTEM', 'BUNIT', 'OBSTYP', 'DATAMIN', 'DATAMAX', 'COMMENT']:
-        del prihdr[ikey]
-
-    prihdr['HLSPNAME'] = ('COS-GAL', 'the COS Quasar Database for Galactic Absorption Lines')
-    prihdr['HLSPLEAD'] = 'Yong Zheng'
-    prihdr['EQUINOX'] = 2000.0
-    prihdr['TARGNAME'] = (tar_name, 'Target name; HSLA(Peeples+2017)')
-    prihdr['RA_TARG'] = (round(tar_RA, 4), 'Right Ascension (deg; J2000); HSLA(Peeples+2017)')
-    prihdr['DEC_TARG'] = (round(tar_DEC, 4), 'Declination (deg; J2000); HSLA(Peeples+2017)')
-    prihdr.comments['DATE'] = 'Date of LAB data cube final release' 
-    prihdr['HISTORY'] = 'Extract HI21cm line from LAB within beam diameter size of %.2f degree. '%(beam)
-
-    import datetime
-    prihdr['HISTORY'] = 'This spectrum is generated on %s.'%(str(datetime.datetime.now()))
-    prihdr['HISTORY'] = 'The LAB cube is from Kalberla et al. (2005). See there for more info.'
-    prihdr['HISTORY'] = 'LAB cube data is in grid of 30 arcmin - violate Nyquist sampling.'
-    prihdu = fits.PrimaryHDU(header=prihdr)
-
-    ## Now save the table/header extension
-    col1 = fits.Column(name='VLSR', format='D', array=cvel)
-    col2 = fits.Column(name='FLUX', format='D', array=ispec)
-    cols = fits.ColDefs([col1, col2])
-    tbhdu = fits.BinTableHDU.from_columns(cols)
-    tbhdu.header['TUNIT1'] = 'km/s' # (or whatever unit the "WAVE" column is).
-    tbhdu.header['TUNIT2'] = 'K' # for the flux array or whatever unit that column is, etc. for the other columns.
-
-    thdulist = fits.HDUList([prihdu, tbhdu])
-    if os.path.isdir(filedir) is False: os.makedirs(filedir)
-    hifile = '%s/hlsp_cos-gal_lab_lab_%s_v1_h-i-21cm-spec.fits.gz'%(filedir, tar_name.lower())
-
-    thdulist.writeto(hifile, clobber=True)
-    return hifile
-
-def extract_HI4PI(target_info, filedir='.', beam=1.0):
-    '''
-    To obtain the corresponding HI 21cm spec with certain beam of HI4PI. 
-
-    beam: to decide within what diameter (in deg) the HI spec is averaged. 
-    '''
+    Extract HI4PI or GALFA-HI spectrum within certain beam size. 
+    Note HI4PI has pixel size of 5.0 arcmin or 1/12 deg. 
+    If input beam size is less than 1/12, force it to 1/12. 
+    Note GALFA-HI has pixel size of 1 arcmin or 1/60 deg, 
+    if input beam size is less than 1/60, force it to 1/60. 
     
+    '''
+
     from yzGALFAHI.get_cubeinfo import get_cubeinfo
     from astropy.coordinates import SkyCoord
     import astropy.io.fits as fits
     from astropy.table import Table
+    import warnings
 
-    target = target_info['NAME']
-    beam_radius = beam/2.
-
-    tar_coord = SkyCoord(ra=target_info['RA'], dec=target_info['DEC'], unit='deg')
-
-    datadir = '/Volumes/YongData2TB/HI4PI'
-    clt = Table.read('%s/HI4PI_RADEC.dat'%(datadir), format='ascii')
+    observation = observation.replace('-', '')
+    if observation == 'HI4PI':
+        if beam < 1/12: beam = 1/12  # HI4PI minimum pix size is 1/12 deg 
+        beam_radius = beam/2.
+        # datadir = '/Volumes/YongData2TB/HI4PI/'
+    elif observation == 'GALFAHI':
+        if beam < 1/60: beam = 1/60  # GALFA-HI minimum pix size is 1/60 deg
+        beam_radius = beam/2.
+        # datadir = '/Volumes/YongData2TB/GALFAHI_DR2/RC5/Wide/'
+    else:
+        logger.info('Cannot find this observation: '%(observation))
+        return [np.nan], [np.nan]
 
     # to find those cubes that have data within the beam 
-    cubefiles = []
-    for ic in range(len(clt)):
-        cubefile = datadir+'/'+clt['cubename'][ic]+'.fits'
-        cubehdr = fits.getheader(cubefile)
-        cra, cdec, cvel = get_cubeinfo(cubehdr)
-        cube_coord = SkyCoord(ra=cra, dec=cdec, unit='deg')
-        dist_coord = tar_coord.separation(cube_coord)
-
-        dist = dist_coord.value
-        within_beam_2d = dist<=beam_radius
-        if dist[within_beam_2d].size > 0:
-            cubefiles.append(cubefile)
-
+    cubefiles = cubes_within_beam(tar_RA, tar_DEC, datadir=datadir, beam=beam, observation=observation)
+    if len(cubefiles) == 0:
+        logger.info('Do not have data in %s'%(observation))
+        return [np.nan], [np.nan]
+    
     specs = []
+    tar_coord = SkyCoord(ra=tar_RA, dec=tar_DEC, unit='deg')
+    logger.info('Extract mean HI 21cm line from these cubes: ')
     for cubefile in cubefiles:
+        logger.info(cubefile)
         cubehdr = fits.getheader(cubefile)
         cra, cdec, cvel = get_cubeinfo(cubehdr)
         cube_coord = SkyCoord(ra=cra, dec=cdec, unit='deg')
@@ -174,41 +276,19 @@ def extract_HI4PI(target_info, filedir='.', beam=1.0):
         cubedata = fits.getdata(cubefile)
         cubedata[np.logical_not(within_beam_3d)] = np.nan
 
-        import warnings
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=RuntimeWarning)
             jspec = np.nanmean(np.nanmean(cubedata, axis=2), axis=1)
 
         specs.append(jspec)
 
-    ispec = np.mean(np.asarray(specs), axis=0)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        ispec = np.mean(np.asarray(specs), axis=0)
 
-    # save the spectrum 
-    prihdr = fits.Header()
-    prihdr['OBS'] = observation
-    prihdr.comments['OBS'] = 'See %s publication.'%(observation)
-    prihdr['CREATOR'] = "YZ"
-    prihdr['COMMENT'] = "HI 21cm spectrum averaged within beam size of %.2f deg. "%(beam)
-    import datetime as dt
-    prihdr['DATE'] = str(dt.datetime.now())
-    prihdu = fits.PrimaryHDU(header=prihdr)
+    return cvel, ispec
 
-    ## table 
-    col1 = fits.Column(name='VLSR', format='D', array=cvel)
-    col2 = fits.Column(name='FLUX', format='D', array=ispec)
-    cols = fits.ColDefs([col1, col2])
-    tbhdu = fits.BinTableHDU.from_columns(cols)
-    thdulist = fits.HDUList([prihdu, tbhdu])
-
-    if os.path.isdir(filedir) is False: os.makedirs(filedir)
-
-    if beam >= 1.:
-        hifile = '%s/%s_HI21cm_%s_Beam%ddeg.fits.gz'%(filedir, target, observation, beam)
-    else:
-        hifile = '%s/%s_HI21cm_%s_Beam%darcmin.fits.gz'%(filedir, target, observation, beam*60)
-    thdulist.writeto(hifile, clobber=True)
-
-      
+## =================================================================================================
 def extract_HI21cm(target_info, filedir='.', observation='HI4PI', beam=1.):
     '''
     To obtain the corresponding HI data for the QSO sightlines. Can be used 
