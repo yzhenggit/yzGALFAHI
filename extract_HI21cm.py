@@ -32,7 +32,7 @@ def find_the_cube(ra, dec, observation):
     cubename = clt['cubename'][indall]
     if len(cubename)==0:
         logger.info("No corresponding HI cube in %s"%(observation))
-        return '', ''
+        return False, False
     else:
         cubename = cubename[0]
         if observation == 'EBHIS': cubedir = datadir+'/'+cubename+'.fit'
@@ -46,7 +46,7 @@ def create_primary_header_HI(target_info, observation='HI4PI', beam=1.0):
     import datetime
 
     if observation not in ['HI4PI', 'LAB', 'GALFA-HI', 'GALFAHI']:
-        # logger.info('Do not recognize %s'%(observation))
+        logger.info('Do not recognize %s'%(observation))
         return False
     
     newhdr = fits.Header()
@@ -104,15 +104,6 @@ def save_HIspec_fits(target_info, savedir='.', beam=1., observation='HI4PI',
     if observation not in ['HI4PI', 'LAB', 'GALFA-HI', 'GALFAHI']:
         logger.info('Do not recognize %s'%(observation))
         return False
-    ## test whether datadir is the right one
-    if observation == 'LAB' and '.fit' not in datadir:
-        logger.info('For LAB, pls give directory and the cube name, e.g., %s'%(
-                    '/Users/Yong/Dropbox/databucket/LAB/labh_glue.fits'))
-        return False
-    if observation in ['HI4PI', 'GALFA-HI', 'GALFAHI'] and '.fit' in datadir:
-        logger.info('For HI4PI or GALFA-HI, give directory only, e.g., %s'(
-                    '/Volumes/YongData2TB/HI4PI'))
-        return False
 
     ## create the primary header for this spectra 
     prihdu = create_primary_header_HI(target_info, observation=observation, beam=beam)
@@ -125,7 +116,6 @@ def save_HIspec_fits(target_info, savedir='.', beam=1., observation='HI4PI',
                                               observation=observation, datadir=datadir)
     ## this is mostly for GALFA-HI, which it only covers from DEC=-1 to 38 degree. 
     if type(hivel) == bool: 
-        logger.info('Do not have data in %s, please check'%(observation))
         return False
 
     col1 = fits.Column(name='VLSR', format='D', array=hivel)
@@ -139,8 +129,9 @@ def save_HIspec_fits(target_info, savedir='.', beam=1., observation='HI4PI',
     thdulist = fits.HDUList([prihdu, tbhdu])
     if os.path.isdir(savedir) is False: os.makedirs(savedir)
     obs_tag = observation.lower().replace('-', '')
-    hifile = '%s/hlsp_cos-gal_%s_%s_%s_v1_h-i-21cm-spec.fits.gz'%(savedir, obs_tag, obs_tag, 
-                                                                  target_info['NAME'].lower())
+    hifile = '%s/hlsp_cos-gal_%s_%s_%s_v1_h-i-21cm-spec-beam%.3fdeg.fits.gz'%(savedir, obs_tag, obs_tag, 
+                                                                              target_info['NAME'].lower(), 
+                                                                              beam)
     thdulist.writeto(hifile, clobber=True)
     return hifile
 
@@ -267,9 +258,13 @@ def extract_HI4PI_GALFAHI(tar_RA, tar_DEC, beam=1.0, observation='HI4PI',
         if beam < 1/60: beam = 1/60  # GALFA-HI minimum pix size is 1/60 deg
         beam_radius = beam/2.
         # datadir = '/Volumes/YongData2TB/GALFAHI_DR2/RC5/Wide/'
+
+        if tar_DEC < -1.3 or tar_DEC > -37.9: 
+            logger.info('This target is not observed in GALFA-HI')
+            return False, False
     else:
         logger.info('Cannot find this observation: '%(observation))
-        return [np.nan], [np.nan]
+        return False, False
 
     # to find those cubes that have data within the beam 
     cubefiles = cubes_within_beam(tar_RA, tar_DEC, datadir=datadir, beam=beam, observation=observation)
