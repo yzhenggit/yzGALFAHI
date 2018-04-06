@@ -63,21 +63,21 @@ def create_primary_header_HI(target_info, observation='HI4PI', beam=1.0):
         newhdr['SURVEY'] = ('LAB', 'The Leiden/Argentine/Bonn (LAB) Survey')
         newhdr['TELESCOP'] = ('Dwingeloo - Villa Elisa', 'Telescope')
         newhdr['REFERENC'] = ('Kalberla et al. (2005) A&A 440, 775', 'LAB cube reference')
-        newhdr['HISTORY'] = 'HI21cm line from LAB cube, averaged within %.1f deg beam.'%(beam)
+        newhdr['HISTORY'] = 'HI21cm line from LAB cube, averaged within %.3f deg beam.'%(beam)
         newhdr['HISTORY'] = 'This spectrum is generated on %s.'%(str(datetime.datetime.now()))
         newhdr['HISTORY'] = 'Note LAB cube data is in grid of 30 arcmin, no Nyquist sampling.'
     elif observation == 'HI4PI':
         newhdr['SURVEY'] = ('HI4PI', 'The HI 4-PI Survey')
         newhdr['TELESCOP'] = ('Effelsberg 100m RT; ATNF Parkes 64-m', 'Telescope')
         newhdr['REFERENC'] = ('HI4PI Collaboration 2016', 'HI4PI cubes reference')
-        newhdr['HISTORY'] = 'HI21cm line from HI4PI cubes, averaged within %.1f deg beam.'%(beam)
+        newhdr['HISTORY'] = 'HI21cm line from HI4PI cubes, averaged within %.3f deg beam.'%(beam)
         newhdr['HISTORY'] = 'This spectrum is generated on %s.'%(str(datetime.datetime.now()))
     else:  # this is for GALFA-HI
         newhdr['SURVEY'] = ('GALFA-HI DR2', 'The Galactic ALFA HI survey')
         newhdr['TELESCOP'] = ('Arecibo 305m', 'Telescope')
         newhdr['INSTRUME'] = ('Arecibo L-Band Feed Array (ALFA)', 'Instrument')
         newhdr['REFERENC'] = ('Peek et al. (2018), ApJS, 234, 2P', 'GALFA-HI cubes reference')
-        newhdr['HISTORY'] = 'HI21cm line from GALFA-HI cubes, averaged within %.1f deg beam.'%(beam)
+        newhdr['HISTORY'] = 'HI21cm line from GALFA-HI cubes, averaged within %.3f deg beam.'%(beam)
         newhdr['HISTORY'] = 'This spectrum is generated on %s.'%(str(datetime.datetime.now()))
 
     primary_hdu = fits.PrimaryHDU(header=newhdr)
@@ -129,9 +129,8 @@ def save_HIspec_fits(target_info, savedir='.', beam=1., observation='HI4PI',
     thdulist = fits.HDUList([prihdu, tbhdu])
     if os.path.isdir(savedir) is False: os.makedirs(savedir)
     obs_tag = observation.lower().replace('-', '')
-    hifile = '%s/hlsp_cos-gal_%s_%s_%s_v1_h-i-21cm-spec-beam%.3fdeg.fits.gz'%(savedir, obs_tag, obs_tag, 
-                                                                              target_info['NAME'].lower(), 
-                                                                              beam)
+    hifile = '%s/hlsp_cos-gal_%s_%s_%s_21cm_v1_h-i-21cm-spec-beam%.3fdeg.fits.gz'%(savedir, 
+                                      obs_tag, obs_tag, target_info['NAME'].lower(), beam)
     thdulist.writeto(hifile, clobber=True)
     return hifile
 
