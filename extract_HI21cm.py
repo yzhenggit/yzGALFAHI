@@ -153,7 +153,7 @@ def cubes_within_beam(tar_RA, tar_DEC, datadir='.', beam=1.0, observation='HI4PI
     surveytable = '/Users/Yong/Dropbox/GitRepo/yzGALFAHI/tables/%s_RADEC.dat'%(observation)
     clt = Table.read(surveytable, format='ascii')
     
-    if observation == 'HI4PI':
+    if observation in ['HI4PI', 'EBHIS']:
         cubewth = 20   # deg 
     elif observation == 'GALFAHI':
         cubewth = 10   # deg 
@@ -173,7 +173,10 @@ def cubes_within_beam(tar_RA, tar_DEC, datadir='.', beam=1.0, observation='HI4PI
                 continue
             else:
                 ## if the cube is within the beam range, then do a serious search 
-                cubefile = datadir+'/'+clt['cubename'][ic]+'.fits'
+                if observation == 'EBHIS': ## EBHIS has annoying .fit ending!
+                    cubefile = datadir+'/'+clt['cubename'][ic]+'.fit'
+                else:
+                    cubefile = datadir+'/'+clt['cubename'][ic]+'.fits'
                 cubehdr = fits.getheader(cubefile)
                 cra, cdec, cvel = get_cubeinfo(cubehdr)
                 cube_coord = SkyCoord(ra=cra, dec=cdec, unit='deg')
@@ -249,7 +252,7 @@ def extract_HI4PI_GALFAHI(tar_RA, tar_DEC, beam=1.0, observation='HI4PI',
     import warnings
 
     observation = observation.replace('-', '')
-    if observation == 'HI4PI':
+    if observation in ['EBHIS', 'HI4PI']:
         if beam < 1/12: beam = 1/12  # HI4PI minimum pix size is 1/12 deg 
         beam_radius = beam/2.
         # datadir = '/Volumes/YongData2TB/HI4PI/'
