@@ -89,6 +89,13 @@ def save_HIspec_fits(target_info, savedir='.', beam=1., observation='HI4PI',
     '''
     To obtain the corresponding HI 21cm spec with certain beam of LAB. 
 
+    target_info = {'NAME': target,
+                   'RA': right ascension (J2000),
+                   'DEC': declination (J2000),
+                   'l': Galactic latitude (J2000),
+                   'b': Galactic longitude (J2000),
+                  }
+
     beam: to decide within what diameter (in deg) the HI spec is averaged. 
     datadir: for LAB data, you give directory and the cube name
              e.g., datadir='/Users/Yong/Dropbox/databucket/LAB/labh_glue.fits'
@@ -232,7 +239,8 @@ def extract_LAB(tar_gl, tar_gb, beam=1.0,
 
 ## =================================================================================================
 def extract_HI4PI_GALFAHI(tar_RA, tar_DEC, beam=1.0, observation='HI4PI', 
-                          datadir='/Volumes/YongData2TB/HI4PI/'):
+                          datadir='/Volumes/YongData2TB/HI4PI/', 
+                          spec_mean=True, spec_median=False):
     '''
     Extract HI4PI or GALFA-HI spectrum within certain beam size. 
     Spectra are averaged within the beam. 
@@ -243,6 +251,12 @@ def extract_HI4PI_GALFAHI(tar_RA, tar_DEC, beam=1.0, observation='HI4PI',
 
     tar_RA: the right ascension of the line of sight. 
     tar_DEC: the declination of the line of sight. 
+
+    spec_mean: take the mean values within the beam, this reduces
+               the noise of the final spectra. Default to True.
+    spec_median: take the median value within the beam. Gonna test
+               it, hopefully keep the noise level of the data. 
+               Default to False. 
     '''
 
     from yzGALFAHI.get_cubeinfo import get_cubeinfo
@@ -269,14 +283,20 @@ def extract_HI4PI_GALFAHI(tar_RA, tar_DEC, beam=1.0, observation='HI4PI',
         return False, False
 
     # to find those cubes that have data within the beam 
-    cubefiles = cubes_within_beam(tar_RA, tar_DEC, datadir=datadir, beam=beam, observation=observation)
+    cubefiles = cubes_within_beam(tar_RA, tar_DEC, datadir=datadir, 
+                                  beam=beam, observation=observation)
     if len(cubefiles) == 0:
         logger.info('Do not have data in %s'%(observation))
         return False, False
     
     specs = []
     tar_coord = SkyCoord(ra=tar_RA, dec=tar_DEC, unit='deg')
-    logger.info('Extract mean HI 21cm line from these cubes: ')
+    if spec_median == True: 
+        spec_mess = 'median'
+    else: # Default to mean spectra value
+        spec_mess = 'mean'
+    logger.info('Extract %s HI 21cm line from these cubes: '%(spec_mess))
+
     for cubefile in cubefiles:
         logger.info(cubefile)
         cubehdr = fits.getheader(cubefile)
@@ -293,13 +313,19 @@ def extract_HI4PI_GALFAHI(tar_RA, tar_DEC, beam=1.0, observation='HI4PI',
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=RuntimeWarning)
-            jspec = np.nanmean(np.nanmean(cubedata, axis=2), axis=1)
-
+            if spec_median == True:
+                jspec = np.nanmedian(np.nanmedian(cubedata, axis=2), axis=1)
+            else: # Default to take the mean value of the spectra
+                jspec = np.nanmean(np.nanmean(cubedata, axis=2), axis=1) 
+                
         specs.append(jspec)
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=RuntimeWarning)
-        ispec = np.mean(np.asarray(specs), axis=0)
+        if spec_median == True:
+            ispec = np.median(np.asarray(specs), axis=0)
+        else: # Default to make the average spectra
+            ispec = np.mean(np.asarray(specs), axis=0)
 
     return cvel, ispec
 
