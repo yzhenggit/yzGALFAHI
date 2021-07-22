@@ -22,6 +22,10 @@ def get_cubeinfo(header, returnHeader=False, origin=1):
     - 			velocity in 1D.
                         or (gl, gb, vlsr, header array)
     - History: updated as of 2016.10.03. Yong Zheng @ Columbia Astro.
+
+    Example: 
+    galfa_cube = 'GALFA_HI_RA+DEC_172.00+34.35_W.fits.gz'
+    ra_2d, dec_2d, vel_1d = get_cubeinfo(galfa_cube)
     '''
 
     #import sys
