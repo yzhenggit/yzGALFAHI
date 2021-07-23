@@ -18,7 +18,7 @@ def filter_cube(data, fregion, siglevel=2):
 
     # get stats of the region using sigma clipping
     from astropy.stats import sigma_clipped_stats
-    mean, med, sigma = sigma_clipped_stats(snoise, sigma_lower=3.0,
+    mean, med, sigma = sigma_clipped_stats(noise, sigma_lower=3.0,
                                        sigma_upper=3.0, maxiters=5)
 
     # sig = np.median(np.median(noise, axis=2), axis=1)* siglevel # wrong ...
